@@ -1,5 +1,31 @@
-package org.firstinspires.ftc.teamcode;
+/*
+ * Copyright (c) 2021 OpenFTC Team
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+package org.firstinspires.ftc.teamcode.OpenCV;
+
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.openftc.apriltag.AprilTagDetection;
@@ -7,67 +33,56 @@ import org.openftc.easyopencv.OpenCvCamera;
 import org.openftc.easyopencv.OpenCvCameraFactory;
 import org.openftc.easyopencv.OpenCvCameraRotation;
 
-import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
-import com.qualcomm.robotcore.hardware.Servo;
-import com.qualcomm.robotcore.util.ElapsedTime;
+import java.util.ArrayList;
 
-//@Disabled
-@TeleOp(name="TeleOpCenterStageTest", group="Linear Opmode")
 
-public class TeleOpCenterStageTest extends LinearOpMode {
+@Autonomous(name = "Close_Red", group = "Linear Opmode")
+public class Close_Red_Camera_Detection extends LinearOpMode
+{
+    //declare DC Motors
+    DcMotor TopRight = null;
+    DcMotor TopLeft = null;
+    DcMotor BottomRight = null;
+    DcMotor BottomLeft = null;
+    DcMotor ArmMotor = null;
 
-    private ElapsedTime runtime = new ElapsedTime();
-    private DcMotor TopRight = null;
-    private DcMotor TopLeft = null;
-    private DcMotor BottomRight = null;
-    private DcMotor BottomLeft = null;
-    private DcMotor ArmMotor = null;
     private DcMotor LinearSlideMotor = null;
+    private int slidePos = 0;
 
     private Servo servoarm = null;
-    private Servo planeServo = null;
 
-    private int Padpos = 0;
-    private int ArmPos = 0;
-    //private DcMotor CarouselMotor = null;
-    private DcMotor LiftMotor = null; // port 0
-    //private DcMotor IntakeMotor = null;
-    private DcMotor ArmMotor2 = null;
-    private boolean armMotorPressed = false;
-    private boolean holdRequest = false; //armMotor
-    private boolean holdRequest2 = false; //armMotor
-    private boolean armDownPosition = false;
-    private int lmPos = 0;
-    private int armCounter = 0;
-    private double servoMove = 0.1;
 
-    private double pos = 0.4;
-    private double pos2 = 0.4;
-    private int slidePos;
-    private int armpos;
-    //        private DcMotor OutakeMotor = null;
-//        private int targetPosition;
-    private int armPos;
-    private int targetPosition;
-    private int targetPosition2;
-    
+    private int lfPos;
+    private int rfPos;
+    private int lrPos;
+    private int rrPos;
+
+    // operational constants
+    private double fast = 0.5; // Limit motor power to this value for Andymark RUN_USING_ENCODER mode
+    private double medium = 0.3; // medium speed
+    private double slow = 0.1; // slow speed
+    private double clicksPerInch = 87.5; // empirically measured
+    private double clicksPerDeg = 21.94; // empirically measured
+    private double lineThreshold = 0.7; // floor should be below this value, line above
+    private double redThreshold = 1.9; // red should be below this value, blue above
+    private boolean isReleased = false;
+    private boolean isLatched = false;
+    private boolean isIn = false;
+
+    private ElapsedTime runtime = new ElapsedTime();
+
+    static final double     COUNTS_PER_MOTOR_REV    = 386.6 ;    // eg: TETRIX Motor Encoder
+    static final double     DRIVE_GEAR_REDUCTION    = 2.0 ;     // This is < 1.0 if geared UP
+    static final double     WHEEL_DIAMETER_INCHES   = 4.0 ;     // For figuring circumference
+    static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
+            (WHEEL_DIAMETER_INCHES * 3.1415);
+
     OpenCvCamera camera;
     AprilTagDetectionPipeline aprilTagDetectionPipeline;
 
-    private double clicksPerInch = 40; // empirically measured //87.5 - previous value
-    private double clicksPerDeg = 21.94; // empirically measured
+    static final double FEET_PER_METER = 3.28084;
 
-
-    static final double COUNTS_PER_MOTOR_REV = 386.6;    // eg: TETRIX Motor Encoder
-    static final double DRIVE_GEAR_REDUCTION = 2.0;     // This is < 1.0 if geared UP
-    static final double WHEEL_DIAMETER_INCHES = 4.0;     // For figuring circumference
-    static final double COUNTS_PER_INCH = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
-            (WHEEL_DIAMETER_INCHES * 3.1415);
-            
-      // Lens intrinsics
+    // Lens intrinsics
     // UNITS ARE PIXELS
     // NOTE: this calibration is for the C920 webcam at 800x448.
     // You will need to do your own calibration for other configurations!
@@ -139,237 +154,395 @@ public class TeleOpCenterStageTest extends LinearOpMode {
 
         telemetry.setMsTransmissionInterval(50);
 
-    @Override
-    public void runOpMode() {
-        //Sets up the hardware
-
-        //TopRight
-        TopRight = hardwareMap.get(DcMotor.class, "TopRight");
-        TopRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        TopRight.setDirection(DcMotor.Direction.FORWARD);
-
-        //TopLeft
-        TopLeft = hardwareMap.get(DcMotor.class, "TopLeft");
-        TopLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        TopLeft.setDirection(DcMotor.Direction.FORWARD);
-
-        //BottomRight
-        BottomRight = hardwareMap.get(DcMotor.class, "BottomRight");
-        BottomRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        BottomRight.setDirection(DcMotor.Direction.FORWARD);
-
-        //BottomLeft
-        BottomLeft = hardwareMap.get(DcMotor.class, "BottomLeft");
-        BottomLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        BottomLeft.setDirection(DcMotor.Direction.FORWARD);
-
-        //servo
-        servoarm = hardwareMap.get(Servo.class, "servoarm"); //write THIS name into the configuration
-
-        planeServo = hardwareMap.get(Servo.class, "planeServo");
-
-        //Linear Slides
-        LinearSlideMotor = hardwareMap.get(DcMotor.class, "LinearSlideMotor");
-        LinearSlideMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        LinearSlideMotor.setDirection(DcMotor.Direction.FORWARD);
-
-        ArmMotor = hardwareMap.get(DcMotor.class, "ArmMotor");
-        ArmMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        ArmMotor.setDirection(DcMotor.Direction.FORWARD);
-        ArmMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-
-
-        // Zero Power Behavior
-        ArmMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
+        /*
+         * The INIT-loop:
+         * This REPLACES waitForStart!
+         */
+        servoOpen(servoarm, 0.7);
         waitForStart();
-        if (isStopRequested()) return;
-
-        while (opModeIsActive() && !isStopRequested()) {
-            checkButtonStatus();
-            driveWheels(BottomLeft, BottomRight, TopLeft, TopRight);
-            // sliderMotor(LinearSlideMotor);
-            slideMotor(LinearSlideMotor);
-            servoMove(servoarm);
-            planeLaunch(planeServo);
-            Arm(ArmMotor);
-            setArmDownPosition(ArmMotor);
-
-
-            telemetry.addData("Pos: ", servoarm.getPosition());
-            telemetry.update();
-
-
-
-
-        }
-    }
-
-    public void driveWheels(DcMotor BottomLeft, DcMotor BottomRight, DcMotor TopLeft, DcMotor TopRight) {
-
-        double speedAdjust = 7;
-//        BottomLeft.setPower((gamepad1.left_stick_y - gamepad1.left_stick_x - gamepad1.right_stick_x) * (-speedAdjust / 10));
-//        BottomRight.setPower((gamepad1.left_stick_y + gamepad1.left_stick_x + gamepad1.right_stick_x) * (-speedAdjust / 10));
-//        TopLeft.setPower((gamepad1.left_stick_y - gamepad1.left_stick_x - gamepad1.right_stick_x) * (-speedAdjust / 10));
-//        TopRight.setPower((gamepad1.left_stick_y + gamepad1.left_stick_x + gamepad1.right_stick_x) * (-speedAdjust / 10));
-
-        BottomLeft.setPower((gamepad1.left_stick_y - gamepad1.left_stick_x - gamepad1.right_stick_x) * (-speedAdjust / 10));
-        BottomRight.setPower((gamepad1.left_stick_y + gamepad1.left_stick_x + gamepad1.right_stick_x) * (speedAdjust / 10));
-        TopLeft.setPower((gamepad1.left_stick_y + gamepad1.left_stick_x - gamepad1.right_stick_x) * (-speedAdjust / 10));
-        TopRight.setPower((gamepad1.left_stick_y - gamepad1.left_stick_x + gamepad1.right_stick_x) * (speedAdjust / 10));
-        //  liftArmMotor(ArmMotor,ArmMotor2);
-    }
-
-    public void Arm(DcMotor ArmMotor)
-    {
-        double speed = 7;
-
-        ArmMotor.setPower(-gamepad2.left_stick_y  * 1/2);
-    }
-
-    public void checkButtonStatus() {
-        if (!gamepad2.right_bumper) {
-            armMotorPressed = false;
-        }
-        if (!gamepad2.left_bumper) {
-            armDownPosition = false;
-        }
-    }
-
-
-    private void sliderMotor(DcMotor LinearSlideMotor){
-        // if (LinearSlideMotor != null) {
-        LinearSlideMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        Padpos = LinearSlideMotor.getCurrentPosition();
-
-        if (gamepad1.x) {
-            LinearSlideMotor.setPower(0.3);
-            Padpos += 10 * clicksPerInch;
-        } else if (gamepad2.y) {
-            LinearSlideMotor.setPower(0.3);
-            Padpos += 23 * clicksPerInch;
-        } else if (gamepad2.a) {
-            LinearSlideMotor.setPower(0.3);
-            Padpos += 35 * clicksPerInch;
-        } else {
-            LinearSlideMotor.setPower(0);
-        }
-        LinearSlideMotor.setTargetPosition(Padpos);
-        //   }
-
-
-    }
-
-    private void setArmDownPosition(DcMotor ArmMotor) {
-
-        if (ArmMotor != null) {
-            ArmMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            //Padpos = LinearSlideMotor.getCurrentPosition();
-
-            if (gamepad2.x) {
-                // int position = int(LinearSlideMotor.getCurrentPosition() * clicksPerInch);
-
-                ArmMotor.setPower(0.7);
-                armPos = -2017;
-                ArmMotor.setTargetPosition(armPos);
-                ArmMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                telemetry.addData("Current Position arm: ",":%7d", ArmMotor.getCurrentPosition());
-                telemetry.update();
-
-
-            }
-
-        }
-        //
-    } // end of slideMotor
-
-    private void slideMotor(DcMotor LinearSlideMotor) {
-
-        if (LinearSlideMotor != null) {
-            LinearSlideMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            //Padpos = LinearSlideMotor.getCurrentPosition();
-
-            if (gamepad2.dpad_up) {
-                // int position = int(LinearSlideMotor.getCurrentPosition() * clicksPerInch);
-
-
-                LinearSlideMotor.setPower(0.9);
-                slidePos = LinearSlideMotor.getCurrentPosition();
-                telemetry.addData("Current Position arm: ",":%7d", LinearSlideMotor.getCurrentPosition());
-                telemetry.update();
-
-
-            } else if (gamepad2.dpad_down && (LinearSlideMotor.getCurrentPosition() * clicksPerInch) > 0) {
-
-                LinearSlideMotor.setPower(-0.9);
-                slidePos = LinearSlideMotor.getCurrentPosition();
-
-                telemetry.addData("Current Position arm: ", ":%7d", LinearSlideMotor.getCurrentPosition());
-                telemetry.update();
-//                    }
-            }
-            else {
-                LinearSlideMotor.setPower(0);
-                LinearSlideMotor.setTargetPosition(slidePos);
-
-            }
-            LinearSlideMotor.setTargetPosition(Padpos);
-        }
-        //
-    } // end of slideMotor
-
-    private void servoMove(Servo servoarm) {
-
-        if(gamepad2.dpad_left) {
-
-            //servo CLOSE
-            //was 0.9
-            servoarm.setDirection(Servo.Direction.FORWARD);
-            pos = -0.5;
-            servoarm.setPosition(pos);
-            telemetry.addData("Pos: ", pos);
-            telemetry.update();
-
-        }
-        else if(gamepad2.dpad_right) {
-
-            //was 0.7
-            servoarm.setDirection(Servo.Direction.REVERSE);
-            pos = 0.7;
-
-            //servo OPEN
-            servoarm.setPosition(pos);
-            telemetry.addData("Pos: ", pos);
-            telemetry.update();
-        }
-
-
-        servoarm.setPosition(servoarm.getPosition());
-        telemetry.addData("Pos: ", servoarm.getPosition());
-        telemetry.update();
-
-        // }
-
-
-    }
-    private void planeLaunch(Servo planeServo)
-    {
-        if(gamepad1.left_bumper) {
-            pos2 = -0.9;
-            planeServo.setPosition(pos2);
-            telemetry.addData("Pos: ", pos2);
-            telemetry.update();
-        }
-        else if(gamepad1.right_bumper)
+        while (isStarted() && !isStopRequested())
         {
-            pos2 = 0.7;
-            planeServo.setPosition(pos2);
-            telemetry.addData("Pos: ", pos2);
+            ArrayList<AprilTagDetection> currentDetections = aprilTagDetectionPipeline.getLatestDetections();
+
+            if(currentDetections.size() != 0)
+            {
+                boolean tagFound = false;
+
+                for(AprilTagDetection tag : currentDetections)
+                {
+
+                    if(tag.id == left || tag.id == middle || tag.id == right)
+                    {
+                        tagOfInterest = tag;
+                        tagFound = true;
+                        break;
+                    }
+                }
+
+                if(tagFound)
+                {
+                    telemetry.addLine("Tag of interest is in sight!\n\nLocation data:");
+                    tagToTelemetry(tagOfInterest);
+                    if(tagOfInterest.id == left)
+                    {
+                        moveForward(1,medium);
+                        //move right to get away from the cone infront
+                        moveLeft(-20, medium);
+                        //move forward to get closer to the closest medium pole
+                        moveForward(19,medium);
+                        //move right to get to the position near the pole
+                        moveLeft(9, medium);
+                        //go up to drop the cone into the pole
+                        slideMotorUpTest(23, 0.1);
+                        moveForward(3, medium);
+                        servoOpen(servoarm, 0.2);
+
+                        //go to park
+                        moveForward(-2,medium);
+                        servoOpen(servoarm,0.7);
+                        slideMotorUpTest(-23,0.1);
+                        moveLeft(-8,medium);
+                        turnClockwise(68,medium);
+
+
+                    }
+
+                    else if(tagOfInterest.id == middle )
+                    {
+                        //what happens if camera detects the middle sleeve
+                    }
+                    else if(tagOfInterest.id == right)
+                    {
+                        //what happens if camera detects right sleeve
+                    }
+                }
+                else
+                {
+                    telemetry.addLine("Don't see tag of interest :(");
+
+                    if(tagOfInterest == null)
+                    {
+                        telemetry.addLine("(The tag has never been seen)");
+                    }
+                    else
+                    {
+                        telemetry.addLine("\nBut we HAVE seen the tag before; last seen at:");
+                       // tagToTelemetry(tagOfInterest);
+                    }
+                }
+
+            }
+            else
+            {
+                telemetry.addLine("Don't see tag of interest :(");
+
+                if(tagOfInterest == null)
+                {
+                    telemetry.addLine("(The tag has never been seen)");
+                }
+                else
+                {
+                    telemetry.addLine("\nBut we HAVE seen the tag before; last seen at:");
+                  //  tagToTelemetry(tagOfInterest);
+                }
+
+            }
+
+            telemetry.update();
+            sleep(20);
+        }
+
+        /*
+         * The START command just came in: now work off the latest snapshot acquired
+         * during the init loop.
+         */
+
+        /* Update the telemetry */
+        if(tagOfInterest != null)
+        {
+            telemetry.addLine("Tag snapshot:\n");
+            tagToTelemetry(tagOfInterest);
+            telemetry.update();
+            //waitForStart();
+            if(tagOfInterest.id == left)
+            {
+                //move right to get away from the cone infront
+                //   moveRight(14, medium);
+                //move forward to get closer to the closest medium pole
+                  moveForward(13,medium);
+                //move right to get to the position near the pole
+                //  moveRight(-5, medium);
+                // servoOpen(servoarm,1);
+
+            }
+
+            else if(tagOfInterest.id == middle )
+            {
+                //what happens if camera detects the middle sleeve
+            }
+            else if(tagOfInterest.id == right)
+            {
+                //what happens if camera detects right sleeve
+            }
+
+
+        }
+        else
+        {
+            telemetry.addLine("No tag snapshot available, it was never sighted during the init loop :(");
             telemetry.update();
         }
-        planeServo.setPosition(planeServo.getPosition());
-        telemetry.addData("Pos: ", planeServo.getPosition());
-        telemetry.update();
+
+      /*  waitForStart();
+       if(tagOfInterest != null)
+        {
+            telemetry.addLine("Tag snapshot:\n");
+            tagToTelemetry(tagOfInterest);
+            telemetry.update();
+            if(tagOfInterest.id == left)
+            {
+                //what happens if camera detects the left sleeve
+                moveForward(5,slow);
+                telemetry.addLine("No tag snapshot available, it was never sighted during the start loop :(");
+                telemetry.update();
+
+            }
+            else if(tagOfInterest.id == middle )
+            {
+                //what happens if camera detects the middle sleeve
+            }
+            else if(tagOfInterest.id == right)
+            {
+                //what happens if camera detects right sleeve
+            }
+        }
+       else
+        {
+            telemetry.addLine("No tag snapshot available, it was never sighted during the start loop :(");
+           telemetry.update();
+        }
+
+       */
+
+
+        /* Actually do something useful */
+
+        //tagOfInterest.id = middle;
+        //tagOfInterest.id = left;
+
+
+        /* You wouldn't have this in your autonomous, this is just to prevent the sample from ending */
+       // while (opModeIsActive()) {sleep(20);}
     }
+
+    void tagToTelemetry(AprilTagDetection detection)
+    {
+        telemetry.addLine(String.format("\nDetected tag ID=%d", detection.id));
+        telemetry.addLine(String.format("Translation X: %.2f feet", detection.pose.x*FEET_PER_METER));
+        telemetry.addLine(String.format("Translation Y: %.2f feet", detection.pose.y*FEET_PER_METER));
+        telemetry.addLine(String.format("Translation Z: %.2f feet", detection.pose.z*FEET_PER_METER));
+        telemetry.addLine(String.format("Rotation Yaw: %.2f degrees", Math.toDegrees(detection.pose.yaw)));
+        telemetry.addLine(String.format("Rotation Pitch: %.2f degrees", Math.toDegrees(detection.pose.pitch)));
+        telemetry.addLine(String.format("Rotation Roll: %.2f degrees", Math.toDegrees(detection.pose.roll)));
+    }
+
+    private void moveForward(int howMuch, double speed) {
+        // howMuch is in inches. A negative howMuch moves backward.
+
+        // fetch motor positions
+        lfPos = TopLeft.getCurrentPosition();
+        rfPos = TopRight.getCurrentPosition();
+        lrPos = BottomLeft.getCurrentPosition();
+        rrPos = BottomRight.getCurrentPosition();
+        //testPos = TestMotor.getCurrentPosition();
+
+        // calculate new targets
+        lfPos += howMuch * clicksPerInch;
+        rfPos += howMuch * clicksPerInch;
+        lrPos += howMuch * clicksPerInch;
+        rrPos += howMuch * clicksPerInch;
+        //testPos += howMuch * clicksPerInch;
+
+        // move robot to new position
+        TopLeft.setTargetPosition(lfPos);
+        TopRight.setTargetPosition(rfPos);
+        BottomLeft.setTargetPosition(lrPos);
+        BottomRight.setTargetPosition(rrPos);
+        //TestMotor.setTargetPosition(testPos);
+
+        TopLeft.setPower(speed); //WORKS
+        TopRight.setPower(speed);
+        BottomLeft.setPower(speed);
+        BottomRight.setPower(speed);
+
+        TopLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        TopRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        BottomLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        BottomRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        while (TopLeft.isBusy() && TopRight.isBusy() &&
+                BottomLeft.isBusy() && BottomRight.isBusy()) {
+
+            // Display it for the driver.
+            telemetry.addLine("Move Forward");
+            telemetry.addData("Target", "%7d :%7d : %7d : %7d", lfPos, rfPos, lrPos, rrPos);
+            telemetry.addData("Actual", "%7d :%7d : %7d : %7d", TopLeft.getCurrentPosition(),
+                    TopRight.getCurrentPosition(), BottomLeft.getCurrentPosition(),
+                    BottomRight.getCurrentPosition());
+            telemetry.update();
+        }
+
+        // Stop all motion;
+        TopLeft.setPower(0);
+        TopRight.setPower(0);
+        BottomLeft.setPower(0);
+        BottomRight.setPower(0);
+    }
+
+    private void moveLeft(int howMuch, double speed) {
+        // howMuch is in inches. A negative howMuch moves backward.
+
+        // fetch motor positions
+        lfPos = TopLeft.getCurrentPosition();
+        rfPos = TopRight.getCurrentPosition();
+        lrPos = BottomLeft.getCurrentPosition();
+        rrPos = BottomRight.getCurrentPosition();
+
+        // calculate new targets
+        lfPos += howMuch * clicksPerInch;
+        rfPos -= howMuch * clicksPerInch;
+        lrPos -= howMuch * clicksPerInch;
+        rrPos += howMuch * clicksPerInch;
+
+        // move robot to new position
+        TopLeft.setTargetPosition(lfPos);
+        TopRight.setTargetPosition(rfPos);
+        BottomLeft.setTargetPosition(lrPos);
+        BottomRight.setTargetPosition(rrPos);
+        TopRight.setPower(speed);
+        TopLeft.setPower(speed);
+        BottomLeft.setPower(speed);
+        BottomRight.setPower(speed);
+
+        // wait for move to complete
+        while (TopLeft.isBusy() && TopRight.isBusy() &&
+                BottomLeft.isBusy() && BottomRight.isBusy()) {
+
+            // Display it for the driver.
+            telemetry.addLine("Strafe Right");
+            telemetry.addData("Target", "%7d :%7d", lfPos, rfPos, lrPos, rrPos);
+            telemetry.addData("Actual", "%7d :%7d", TopLeft.getCurrentPosition(),
+                    TopRight.getCurrentPosition(), BottomLeft.getCurrentPosition(),
+                    BottomRight.getCurrentPosition());
+            telemetry.update();
+        }
+
+        // Stop all motion;
+        TopLeft.setPower(0);
+        TopRight.setPower(0);
+        BottomLeft.setPower(0);
+        BottomRight.setPower(0);
+
+    }
+    private void slideMotorUpTest(int howMuch, double speed) {
+
+        // howMuch is in inches. A negative howMuch moves backward.
+
+        // fetch motor positions
+        slidePos = LinearSlideMotor.getCurrentPosition();
+
+        // calculate new targets
+        slidePos += howMuch * clicksPerInch;
+
+
+        // move robot to new position
+        LinearSlideMotor.setTargetPosition(slidePos);
+
+        LinearSlideMotor.setPower(speed); //WORKS
+
+
+        LinearSlideMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            /*
+            TopLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            TopRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            BottomLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            BottomRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            */
+        // wait for move to complete
+        while (LinearSlideMotor.isBusy()) {
+
+            // Display it for the driver.
+            telemetry.addLine("Linear Slide");
+            telemetry.addData("Target", "%7d", slidePos);
+            telemetry.addData("Actual", "%7d", LinearSlideMotor.getCurrentPosition());
+            telemetry.update();
+        }
+
+        // Stop all motion;
+        // LinearSlideMotor.setPower(0);
+    }
+
+    private void servoOpen(Servo servoarm, double pos) {
+        //   if (val == 0)
+        //   {
+        //  if (servoarm != null) {
+        servoarm.setDirection(Servo.Direction.FORWARD);
+        servoarm.setPosition(pos);
+        //  }
+
+
+    }
+
+    private void turnClockwise(int whatAngle, double speed) {
+        // whatAngle is in degrees. A negative whatAngle turns counterclockwise.
+
+        // fetch motor positions
+        lfPos = TopLeft.getCurrentPosition();
+        rfPos = TopRight.getCurrentPosition();
+        lrPos = BottomLeft.getCurrentPosition();
+        rrPos = BottomRight.getCurrentPosition();
+
+        // calculate new target
+        lfPos += whatAngle * clicksPerDeg;
+        rfPos -= whatAngle * clicksPerDeg;
+        lrPos += whatAngle * clicksPerDeg;
+        rrPos -= whatAngle * clicksPerDeg;
+
+        // move robot to new position
+        TopLeft.setTargetPosition(lfPos);
+        TopRight.setTargetPosition(rfPos);
+        BottomLeft.setTargetPosition(lrPos);
+        BottomRight.setTargetPosition(rrPos);
+        TopLeft.setPower(speed);
+        TopRight.setPower(speed);
+        BottomLeft.setPower(speed);
+        BottomRight.setPower(speed);
+
+        TopLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        TopRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        BottomLeft.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        BottomRight.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        // wait for move to complete
+        while (TopLeft.isBusy() && TopRight.isBusy() &&
+                BottomLeft.isBusy() && BottomRight.isBusy()) {
+
+            // Display it for the driver.
+            telemetry.addLine("Turn Clockwise");
+            telemetry.addData("Target", "%7d :%7d", lfPos, rfPos, lrPos, rrPos);
+            telemetry.addData("Actual", "%7d :%7d", TopLeft.getCurrentPosition(),
+                    TopRight.getCurrentPosition(), BottomLeft.getCurrentPosition(),
+                    BottomRight.getCurrentPosition());
+            telemetry.update();
+        }
+
+        // Stop all motion;
+        TopLeft.setPower(0);
+        TopRight.setPower(0);
+        BottomLeft.setPower(0);
+        BottomRight.setPower(0);
+    }
+
+
 
 }
